@@ -1,0 +1,60 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#0b0b0b;font-family:'Caladea','Liberation Serif',serif;color:#d9b45a}
+#ph{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+#veil{position:absolute;inset:0;background:#000;opacity:0}
+#vign{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.65) 100%)}
+.band{position:absolute;left:0;right:0;top:1380px;padding:34px 40px;background:rgba(10,10,10,.62);border-top:2px solid rgba(217,180,90,.5);border-bottom:2px solid rgba(217,180,90,.5);text-align:center;opacity:0}
+.band h2{font-size:64px;letter-spacing:6px;text-transform:uppercase;font-weight:700;color:#e3c271}
+.band p{font-size:42px;letter-spacing:3px;color:#f2e6c9;margin-top:8px}
+#end{position:absolute;inset:0;opacity:0;text-align:center}
+#end .bg{position:absolute;inset:-40px;background:url(casquettes.jpg) center/cover;filter:blur(18px) brightness(.28)}
+#end .in{position:absolute;inset:90px 70px;border:2px solid rgba(217,180,90,.7);padding-top:150px}
+.l1{font-size:46px;letter-spacing:10px;color:#f2e6c9}
+.l2{font-size:128px;letter-spacing:8px;font-weight:700;color:#e3c271;line-height:1.05;margin-top:10px}
+.sep{width:280px;height:2px;background:#d9b45a;margin:40px auto}
+.l3{font-size:46px;letter-spacing:4px;color:#f2e6c9;line-height:1.6}
+#thumb{width:760px;height:500px;margin:50px auto 0;background:url(casquettes.jpg) center 62%/cover;border:2px solid rgba(217,180,90,.6)}
+#cta{margin:60px auto 0;width:820px;border:2px solid #d9b45a;padding:30px;background:rgba(0,0,0,.5)}
+#cta .a{font-size:34px;letter-spacing:3px;color:#f2e6c9}
+#cta .b{font-size:56px;letter-spacing:4px;font-weight:700;color:#e3c271;margin-top:6px}
+.fadeel{opacity:0}
+</style></head><body>
+<img id="ph" src="casquettes.jpg">
+<div id="vign"></div>
+<div class="band" id="t0"><h2>Collection Casquettes</h2><p>Hermès · 100 % authentiques</p></div>
+<div class="band" id="t1"><h2>Noir intense</h2><p>Toile piquée · boucle métal</p></div>
+<div class="band" id="t2"><h2>Beige & cuir fauve</h2><p>L'élégance au quotidien</p></div>
+<div class="band" id="t3"><h2>Le détail qui signe</h2><p>Boucle argentée · patte en cuir</p></div>
+<div id="end"><div class="bg"></div><div class="in">
+ <div class="l1 fadeel" id="e1">LA COLLECTION</div>
+ <div class="l2 fadeel" id="e2">CASQUETTES<br>HERMÈS</div>
+ <div class="sep fadeel" id="e3"></div>
+ <div class="l3 fadeel" id="e4">Pièces authentiques<br>Noir · Beige &amp; cuir · Stock limité</div>
+ <div id="thumb" class="fadeel"></div>
+ <div id="cta" class="fadeel"><div class="a">POUR LES PRIX ET LES COMMANDES</div><div class="b">CONTACTEZ-MOI EN PRIVÉ</div></div>
+</div></div>
+<div id="veil"></div>
+<script>
+const $=id=>document.getElementById(id),cl=x=>Math.max(0,Math.min(1,x)),ease=x=>x<.5?2*x*x:1-Math.pow(-2*x+2,2)/2;
+const IW=1170,IH=1555,BASE=1920/IH; // cover by height
+// [start,end,fx,fy,z0,z1]
+const shots=[[0,4.5,.5,.56,1.0,1.1],[4.5,9,.27,.56,1.75,1.95],[9,13.5,.71,.54,1.75,1.95],[13.5,17,.6,.67,3.0,3.4]];
+function cam(fx,fy,z){const s=BASE*z,w=IW*s,h=IH*s;let x=540-fx*w,y=960-fy*h;x=Math.min(0,Math.max(1080-w,x));y=Math.min(0,Math.max(1920-h,y));$('ph').style.transform=`translate(${x}px,${y}px) scale(${s})`}
+window.render=function(t){
+ let veil=0;
+ shots.forEach(([a,b,fx,fy,z0,z1],i)=>{
+  const band=$('t'+i);
+  if(t>=a&&t<b){const p=(t-a)/(b-a);cam(fx+(i==0?0:.02*(p-.5)),fy,z0+(z1-z0)*ease(p));}
+  const bi=cl((t-a-.5)/.6)*cl((b-.3-t)/.4);band.style.opacity=bi;band.style.transform=`translateY(${(1-cl((t-a-.5)/.6))*30}px)`;
+  if(i>0){const d=Math.abs(t-a);if(d<.35)veil=Math.max(veil,1-d/.35);}
+ });
+ if(t>=16.65&&t<17.35)veil=1-Math.abs(t-17)/.35;
+ $('veil').style.opacity=veil;
+ $('end').style.opacity=t>=17?1:0;
+ const w=t-17;[['e1',.2],['e2',.6],['e3',1.1],['e4',1.4],['thumb',1.9],['cta',2.6]].forEach(([id,s])=>{const p=cl((w-s)/.6);$(id).style.opacity=p;$(id).style.transform=`translateY(${(1-p)*25}px)`});
+ const g=w>3.2?1+.025*Math.sin((w-3.2)*4):1;$('cta').style.transform+=` scale(${g})`;
+ $('veil').style.opacity=Math.max(veil,t<.4?1-t/.4:0,t>21.5?(t-21.5)/.5:0);
+};
+render(0);
+</script></body></html>
