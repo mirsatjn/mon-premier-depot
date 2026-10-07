@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ma Boutique</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>🛍️ Ma Boutique</h1>
+    <button id="cart-btn">🛒 Panier (<span id="cart-count">0</span>)</button>
+  </header>
+
+  <main>
+    <section id="suppliers" aria-label="Fournisseurs"></section>
+    <section id="products" aria-label="Produits"></section>
+  </main>
+
+  <aside id="cart" hidden>
+    <h2>Votre panier</h2>
+    <ul id="cart-items"></ul>
+    <p class="total">Total : <strong id="cart-total">0,00 €</strong></p>
+    <button id="checkout">Commander</button>
+    <button id="cart-close" class="secondary">Fermer</button>
+  </aside>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
