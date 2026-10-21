@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simulateur d'appel</title><link rel="stylesheet" href="/style.css">
+<style>.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:300px}.pad button{font-size:1.3rem}
+#screen{min-height:120px;white-space:pre-wrap}</style></head>
+<body><main>
+<h1>📞 Simulateur d'appel</h1>
+<p class="mut">Teste exactement le même parcours que le téléphone (les mêmes URL que Twilio), sans numéro réel. <a href="/admin">← Tableau de bord</a></p>
+<div class="card">
+  <label for="from">Votre numéro (appelant)</label><input id="from" value="+33612345678">
+  <p><button class="primary" id="call">📞 Appeler</button> <button id="hang" disabled>Raccrocher</button>
+  <label style="display:inline"><input type="checkbox" id="tts" style="width:auto;min-height:0"> Lire à voix haute</label></p>
+  <div id="screen" class="card mut">Appuyez sur « Appeler ».</div>
+  <div class="pad" id="pad"></div>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let sid, action=null;
+'123456789*0#'.split('').forEach(k=>{const b=document.createElement('button');b.textContent=k;b.disabled=true;b.onclick=()=>press(k);$('pad').append(b)});
+const keys=()=>$('pad').querySelectorAll('button');
+const dec=s=>s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&amp;/g,'&');
+
+async function step(path,digits){
+  const body=new URLSearchParams({CallSid:sid,From:$('from').value});
+  if(digits!==undefined) body.set('Digits',digits);
+  const r=await fetch(path,{method:'POST',body});
+  if(!r.ok){end('Erreur '+r.status);return}
+  const xml=await r.text();
+  const says=[...xml.matchAll(/<Say[^>]*>([\s\S]*?)<\/Say>/g)].map(m=>dec(m[1]));
+  const g=xml.match(/<Gather[^>]*action="([^"]*)"/);
+  // Dans un Gather, seul le 1er <Say> est lu avant la saisie ; le message « pas de réponse » ne sert qu'en cas de silence.
+  const spoken=g?says.slice(0,1):says;
+  $('screen').textContent=(($('screen').dataset.log||'')+'\n🔊 '+spoken.join('\n🔊 ')).trim();
+  $('screen').dataset.log=$('screen').textContent;
+  if($('tts').checked&&window.speechSynthesis){speechSynthesis.cancel();spoken.forEach(t=>{const u=new SpeechSynthesisUtterance(t);u.lang='fr-FR';speechSynthesis.speak(u)})}
+  if(g){action=dec(g[1]);keys().forEach(b=>b.disabled=false)}else end('— Appel terminé —');
+}
+function end(t){action=null;keys().forEach(b=>b.disabled=true);$('hang').disabled=true;$('call').disabled=false;$('screen').textContent+='\n'+t}
+function press(k){
+  $('screen').textContent+=`\n👉 ${k}`;$('screen').dataset.log=$('screen').textContent;
+  step(action,k==='#'?'':k);
+}
+$('call').onclick=()=>{sid='SIM'+Date.now();$('screen').dataset.log='';$('screen').textContent='';$('call').disabled=true;$('hang').disabled=false;step('/voice/incoming')};
+$('hang').onclick=()=>end('— Raccroché —');
+</script></body></html>

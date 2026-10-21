@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Réserver ou commander</title><link rel="stylesheet" href="/style.css"></head>
+<body><main>
+<h1 id="shop">…</h1><p class="mut" id="sub"></p>
+<div class="tabs"><button id="tR" class="on">🍽️ Réserver une table</button><button id="tC">🛍️ Commander à emporter</button></div>
+
+<section id="res" class="card">
+  <div class="row">
+    <div><label for="rDate">Date</label><input type="date" id="rDate"></div>
+    <div><label for="rParty">Personnes</label><input type="number" id="rParty" min="1" value="2"></div>
+  </div>
+  <label>Heure</label><div class="slots" id="slots"></div>
+  <div class="row">
+    <div><label for="rName">Nom</label><input id="rName" autocomplete="name"></div>
+    <div><label for="rPhone">Téléphone</label><input id="rPhone" type="tel" autocomplete="tel"></div>
+  </div>
+  <label for="rNotes">Remarque (facultatif)</label><input id="rNotes">
+  <p><button class="primary" id="rGo" disabled>Confirmer la réservation</button></p>
+  <div id="rMsg"></div>
+</section>
+
+<section id="cmd" class="card hide">
+  <div id="menu"></div>
+  <p class="right"><strong>Total : <span id="total">0,00 €</span></strong></p>
+  <div class="row">
+    <div><label for="cName">Nom</label><input id="cName" autocomplete="name"></div>
+    <div><label for="cPhone">Téléphone</label><input id="cPhone" type="tel" autocomplete="tel"></div>
+  </div>
+  <p><button class="primary" id="cGo">Envoyer la commande</button></p>
+  <div id="cMsg"></div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id), eur=n=>n.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let info, slot=null, cart={};
+const show=(el,t,txt)=>{el.innerHTML=txt?`<div class="msg ${t}">${esc(txt)}</div>`:''};
+const post=async(u,b)=>{const r=await fetch(u,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});return[r.ok,await r.json()]};
+
+async function init(){
+  info=await (await fetch('/api/info')).json();
+  const s=info.settings;
+  $('shop').textContent=s.name; document.title=s.name;
+  $('sub').textContent=`Ouvert de ${s.open} à ${s.close}`+(s.phone?` · ${s.phone}`:'');
+  $('rDate').value=$('rDate').min=info.today; $('rParty').max=info.maxParty;
+  renderMenu(); loadSlots();
+}
+$('tR').onclick=()=>tab(true); $('tC').onclick=()=>tab(false);
+function tab(r){$('res').classList.toggle('hide',!r);$('cmd').classList.toggle('hide',r);$('tR').classList.toggle('on',r);$('tC').classList.toggle('on',!r)}
+
+async function loadSlots(){
+  slot=null; $('rGo').disabled=true;
+  const party=$('rParty').value, date=$('rDate').value;
+  if(!party||!date){$('slots').innerHTML='';return}
+  const {slots}=await (await fetch(`/api/availability?date=${date}&party=${party}`)).json();
+  $('slots').innerHTML=slots.length?slots.map(t=>`<button data-t="${t}">${t}</button>`).join(''):'<span class="mut">Aucun créneau disponible ce jour-là.</span>';
+  $('slots').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    slot=b.dataset.t; $('rGo').disabled=false;
+    $('slots').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+  });
+}
+$('rDate').onchange=$('rParty').oninput=loadSlots;
+$('rGo').onclick=async()=>{
+  const [ok,d]=await post('/api/reservations',{date:$('rDate').value,time:slot,party:$('rParty').value,name:$('rName').value,phone:$('rPhone').value,notes:$('rNotes').value});
+  if(ok){show($('rMsg'),'ok',`Réservation confirmée : ${d.reservation.party} pers. le ${d.reservation.date} à ${d.reservation.time}. À bientôt !`);}
+  else show($('rMsg'),'err',d.error);
+  loadSlots();
+};
+
+function renderMenu(){
+  $('menu').innerHTML=info.menu.map(m=>`<div class="item"><span class="n">${esc(m.name)}</span><span class="p">${eur(m.price)}</span>
+    <span class="qty"><button data-id="${m.id}" data-d="-1">−</button><b id="q${m.id}">0</b><button data-id="${m.id}" data-d="1">+</button></span></div>`).join('');
+  $('menu').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.id; cart[id]=Math.max(0,(cart[id]||0)+Number(b.dataset.d)); $('q'+id).textContent=cart[id]; total();
+  });
+}
+function total(){$('total').textContent=eur(info.menu.reduce((t,m)=>t+m.price*(cart[m.id]||0),0))}
+$('cGo').onclick=async()=>{
+  const items=Object.entries(cart).filter(([,q])=>q>0).map(([id,qty])=>({id:Number(id),qty}));
+  const [ok,d]=await post('/api/orders',{items,name:$('cName').value,phone:$('cPhone').value});
+  if(ok){show($('cMsg'),'ok',`Commande n°${d.order.number} reçue (${eur(d.order.total)}). Prête dans ${d.order.pickupInMinutes} min.`);cart={};renderMenu();total()}
+  else show($('cMsg'),'err',d.error);
+};
+init();
+</script></body></html>
