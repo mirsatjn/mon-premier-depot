@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Espace commerçant</title><link rel="stylesheet" href="/style.css"></head>
+<body><main>
+<h1 id="title">Espace commerçant</h1>
+<p class="mut"><a href="/" target="_blank">Page client</a> · <a href="/simulateur" target="_blank">Simulateur d'appel</a> · <label style="display:inline"><input type="checkbox" id="snd" style="width:auto;min-height:0"> 🔔 Son à chaque nouveauté</label></p>
+<div class="tabs" id="tabs"></div>
+<div id="view"></div>
+</main>
+<script>
+const $=id=>document.getElementById(id), eur=n=>n.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api=async(u,m='GET',b)=>{const r=await fetch(u,{method:m,headers:{'content-type':'application/json'},body:b?JSON.stringify(b):undefined});if(!r.ok)throw new Error(r.status);return r.json()};
+const ST={confirmed:'Confirmée',seated:'Installée',cancelled:'Annulée',noshow:'Absent',new:'Nouvelle',preparing:'En préparation',ready:'Prête',done:'Remise'};
+const DAYS=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+let S, tab='today', seen=null, editing=false;
+
+const TABS=[['today',"Aujourd'hui"],['res','Réservations'],['ord','Commandes'],['calls','Appels'],['menu','Carte'],['tables','Tables'],['set','Réglages']];
+function drawTabs(){
+  const nNew=S?S.orders.filter(o=>o.status==='new').length:0;
+  $('tabs').innerHTML=TABS.map(([k,l])=>`<button data-k="${k}" class="${tab===k?'on':''}">${l}${k==='ord'&&nNew?`<span class="badge">${nNew}</span>`:''}</button>`).join('');
+  $('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{tab=b.dataset.k;editing=false;render()});
+}
+const tname=id=>S.tables.find(t=>t.id===id)?.name||'?';
+const fdate=d=>d===S.today?"Aujourd'hui":new Date(d+'T12:00:00Z').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
+const act=(kind,id,pairs)=>`<div class="actions">${pairs.map(([s,l])=>`<button class="sm" onclick="setStatus('${kind}',${id},'${s}')">${l}</button>`).join('')}</div>`;
+
+function resRows(list){return list.length?`<table>${list.map(r=>`<tr><td><b>${r.time}</b> ${esc(fdate(r.date))}</td><td>${r.party} pers. · ${esc(tname(r.tableId))}</td><td>${esc(r.name)}<br><a class="mut" href="tel:${esc(r.phone)}">${esc(r.phone)}</a>${r.notes?`<br><i class="mut">${esc(r.notes)}</i>`:''}</td>
+ <td><span class="tag ${r.status}">${ST[r.status]}</span> <span class="tag">${r.source==='telephone'?'📞':'🌐'}</span></td>
+ <td>${r.status==='confirmed'?act('reservations',r.id,[['seated','Arrivé'],['noshow','Absent'],['cancelled','Annuler']]):''}</td></tr>`).join('')}</table>`:'<p class="mut">Aucune réservation.</p>'}
+function ordRows(list){return list.length?list.map(o=>`<div class="card"><div class="row" style="align-items:center"><div><b>#${o.number}</b> · ${esc(o.name)} <a class="mut" href="tel:${esc(o.phone)}">${esc(o.phone)}</a> <span class="tag">${o.source==='telephone'?'📞':'🌐'}</span>
+ <br><span class="mut">${new Date(o.createdAt).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} · prête en ${o.pickupInMinutes} min</span></div>
+ <div>${o.items.map(i=>`${i.qty}× ${esc(i.name)}`).join('<br>')}<br><b>${eur(o.total)}</b></div>
+ <div><span class="tag ${o.status}">${ST[o.status]}</span>${act('orders',o.id,{new:[['preparing','Préparer'],['cancelled','Annuler']],preparing:[['ready','Prête']],ready:[['done','Remise']]}[o.status]||[])}</div></div></div>`).join(''):'<p class="mut">Aucune commande.</p>'}
+
+function render(){
+  drawTabs(); if(!S)return; const v=$('view');
+  const open=S.orders.filter(o=>['new','preparing','ready'].includes(o.status));
+  if(tab==='today') v.innerHTML=`<h2>Réservations du jour</h2>${resRows(S.reservations.filter(r=>r.date===S.today&&r.status!=='cancelled'))}<h2>Commandes en cours (${open.length})</h2>${ordRows(open)}`;
+  else if(tab==='res') v.innerHTML=`<h2>Réservations à venir</h2><div class="card">${resRows(S.reservations)}</div>`;
+  else if(tab==='ord') v.innerHTML=`<h2>Commandes récentes</h2>${ordRows(S.orders)}`;
+  else if(tab==='calls') v.innerHTML=`<h2>Appels reçus</h2><div class="card">${S.calls.length?`<table>${S.calls.map(c=>`<tr><td>${new Date(c.at).toLocaleString('fr-FR')}</td><td>${esc(c.from)}</td><td>${esc(c.outcome)}</td></tr>`).join('')}</table>`:'<p class="mut">Aucun appel.</p>'}</div>`;
+  else if(!editing) editor();
+}
+
+function editor(){
+  editing=true; const v=$('view');
+  if(tab==='menu'){
+    v.innerHTML=`<h2>Carte</h2><div class="card" id="rows">${S.menu.map(m=>menuRow(m)).join('')}<p><button id="add">+ Ajouter un plat</button> <button class="primary" id="save">Enregistrer</button> <span id="ok"></span></p></div>`;
+    $('add').onclick=()=>$('add').parentElement.insertAdjacentHTML('beforebegin',menuRow({name:'',price:0,available:true}));
+    $('save').onclick=()=>saveList('menu','menu',[...document.querySelectorAll('.mrow')].map(r=>({id:r.dataset.id,name:r.querySelector('.a').value,price:r.querySelector('.b').value,available:r.querySelector('.c').checked})));
+  } else if(tab==='tables'){
+    v.innerHTML=`<h2>Tables</h2><div class="card">${S.tables.map(t=>tblRow(t)).join('')}<p><button id="add">+ Ajouter une table</button> <button class="primary" id="save">Enregistrer</button> <span id="ok"></span></p></div>`;
+    $('add').onclick=()=>$('add').parentElement.insertAdjacentHTML('beforebegin',tblRow({name:'',seats:2}));
+    $('save').onclick=()=>saveList('tables','tables',[...document.querySelectorAll('.mrow')].map(r=>({id:r.dataset.id,name:r.querySelector('.a').value,seats:r.querySelector('.b').value})));
+  } else {
+    const s=S.settings;
+    v.innerHTML=`<h2>Réglages</h2><div class="card">
+     <label>Nom du commerce</label><input id="f_name" value="${esc(s.name)}">
+     <label>Téléphone affiché</label><input id="f_phone" value="${esc(s.phone)}">
+     <label>Message d'accueil au téléphone (facultatif)</label><input id="f_welcome" value="${esc(s.welcome)}" placeholder="Bienvenue chez ${esc(s.name)}.">
+     <div class="row"><div><label>Ouverture</label><input type="time" id="f_open" value="${s.open}"></div><div><label>Fermeture</label><input type="time" id="f_close" value="${s.close}"></div></div>
+     <div class="row"><div><label>Pas des créneaux (min)</label><input type="number" id="f_slotMinutes" value="${s.slotMinutes}"></div>
+     <div><label>Durée d'un repas (min)</label><input type="number" id="f_durationMinutes" value="${s.durationMinutes}"></div>
+     <div><label>Préparation commande (min)</label><input type="number" id="f_prepMinutes" value="${s.prepMinutes}"></div></div>
+     <label>Jours de fermeture</label><div class="actions">${DAYS.map((d,i)=>`<label style="display:flex;gap:4px;margin:0"><input type="checkbox" style="width:auto;min-height:0" class="cd" value="${i}" ${s.closedDays.includes(i)?'checked':''}>${d}</label>`).join('')}</div>
+     <p><button class="primary" id="save">Enregistrer</button> <span id="ok"></span></p></div>`;
+    $('save').onclick=async()=>{
+      const b={};['name','phone','welcome','open','close','slotMinutes','durationMinutes','prepMinutes'].forEach(k=>b[k]=$('f_'+k).value);
+      b.closedDays=[...document.querySelectorAll('.cd:checked')].map(x=>Number(x.value));
+      await api('/api/admin/settings','PUT',b); $('ok').textContent='✓ Enregistré'; await load(true);
+    };
+  }
+}
+const menuRow=m=>`<div class="item mrow" data-id="${m.id||''}"><input class="a" placeholder="Nom du plat" value="${esc(m.name)}"><input class="b" type="number" step="0.01" min="0" style="max-width:100px" value="${m.price}"><label style="display:flex;gap:4px;margin:0"><input class="c" type="checkbox" style="width:auto;min-height:0" ${m.available?'checked':''}>Dispo</label><button class="sm" onclick="this.closest('.mrow').remove()">✕</button></div>`;
+const tblRow=t=>`<div class="item mrow" data-id="${t.id||''}"><input class="a" placeholder="Nom (T1…)" value="${esc(t.name)}"><input class="b" type="number" min="1" style="max-width:100px" value="${t.seats}"><span class="mut">places</span><button class="sm" onclick="this.closest('.mrow').remove()">✕</button></div>`;
+async function saveList(key,url,rows){await api('/api/admin/'+url,'PUT',{[key]:rows});$('ok').textContent='✓ Enregistré';await load(true)}
+
+async function setStatus(kind,id,status){await api(`/api/admin/${kind}/${id}`,'POST',{status});load()}
+function beep(){try{const c=new AudioContext(),o=c.createOscillator();o.connect(c.destination);o.frequency.value=880;o.start();o.stop(c.currentTime+.25)}catch{}}
+
+async function load(force){
+  try{
+    S=await api('/api/admin/state'); $('title').textContent=S.settings.name+' — espace commerçant';
+    const sig=S.orders.length+'/'+S.reservations.length+'/'+S.calls.length;
+    if(seen!==null&&seen!==sig&&$('snd').checked)beep();
+    seen=sig; if(!editing||force){editing=false;render()}else drawTabs();
+  }catch(e){ if(String(e).includes('401'))location.reload() }
+}
+load(); setInterval(load,5000);
+</script></body></html>

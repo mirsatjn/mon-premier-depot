@@ -1,0 +1,12 @@
+{
+  "name": "standard-auto",
+  "version": "1.0.0",
+  "description": "Standard téléphonique automatique pour commerçants : réservation de table et commande à emporter.",
+  "private": true,
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test \"test/*.test.js\""
+  }
+}
