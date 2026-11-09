@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# bonjour : dit bonjour. Usage : bonjour [nom]
+set -euo pipefail
+
+case "${1:-}" in
+  -h|--help)
+    echo "Usage : bonjour [nom]"
+    echo "Affiche un message de bienvenue."
+    exit 0 ;;
+esac
+
+echo "Bonjour, ${1:-le monde} !"
